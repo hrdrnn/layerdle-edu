@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Privacy — Layerdle</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
+</head>
+<body>
+  <header class="main-header">
+    <h1>Privacy Policy</h1>
+    <nav class="main-nav">
+      <a href="index.html">Home</a>
+      <a href="about.html">About</a>
+      <a href="faq.html">FAQ</a>
+      <a href="privacy.html" class="active">Privacy</a>
+    </nav>
+  </header>
+  <main class="wrap">
+    <section class="card">
+      <h2>Your Data & Privacy</h2>
+      <p>
+        Layerdle respects your privacy. This site does not collect personal information. The audio
+        files (stems) are fetched directly from the URLs you provide in your manifest and are
+        played locally in your browser using the Web Audio API. They are not uploaded or stored
+        on our servers.
+      </p>
+      <p>
+        To improve performance, a service worker caches the site’s static assets (HTML, CSS,
+        JavaScript and icons) so that it can work offline. Audio files are <strong>not</strong>
+        cached by the service worker; they are streamed fresh each time you load a puzzle.
+      </p>
+      <p>
+        Please ensure that you have the right to use any stems you host and link via your
+        manifest. We do not assume responsibility for copyright infringement.
+      </p>
+    </section>
+  </main>
+  <footer class="main-footer">
+    <p>&copy; 2025 Layerdle — Education Edition.</p>
+  </footer>
+</body>
+</html>

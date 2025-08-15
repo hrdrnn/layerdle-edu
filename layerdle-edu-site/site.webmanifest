@@ -1,0 +1,22 @@
+{
+  "name": "Layerdle — Education Daily",
+  "short_name": "Layerdle",
+  "description": "Guess the song by listening to layers of drums, bass, chords, melody and vocals. A daily puzzle using educational stems.",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f1220",
+  "theme_color": "#0f1220",
+  "scope": "/"
+}
