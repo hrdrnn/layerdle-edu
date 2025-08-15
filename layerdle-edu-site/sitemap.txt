@@ -1,0 +1,5 @@
+/index.html
+/about.html
+/faq.html
+/privacy.html
+/manifest.json

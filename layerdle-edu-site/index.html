@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Layerdle — Education Daily Game</title>
+  <!-- Link to the shared stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+  <!-- PWA manifest -->
+  <link rel="manifest" href="site.webmanifest">
+  <!-- Icons for various devices -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
+</head>
+<body>
+  <header class="main-header">
+    <h1>Layerdle: Education Daily</h1>
+    <nav class="main-nav">
+      <a href="index.html" class="active">Home</a>
+      <a href="about.html">About</a>
+      <a href="faq.html">FAQ</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <!-- Introduction section -->
+    <section class="intro card">
+      <h2>Guess the song from its musical layers</h2>
+      <p>
+        Layerdle is a daily musical challenge. Each day you’ll hear a song broken down into five
+        separate stems—drums, bass, chords, melody and vocals. Listen carefully as they build up
+        one by one and see if you can identify the track before your guesses run out.
+      </p>
+      <p>
+        This version of Layerdle uses educational multitrack recordings from projects such as
+        Cambridge‑MT and Slakh2100. All stems are hosted on your own server. The game never
+        uploads audio—everything stays in your browser.
+      </p>
+    </section>
+
+    <!-- Game container -->
+    <section class="game card">
+      <h2>Play Today’s Layerdle</h2>
+      <div class="settings">
+        <div class="setting-row">
+          <label for="manifestUrl">Manifest URL</label>
+          <input id="manifestUrl" type="url" placeholder="https://your-site.com/manifest.json" />
+        </div>
+        <div class="setting-row">
+          <label for="auDate">Date (Australia/Brisbane)</label>
+          <input id="auDate" type="text" readonly />
+        </div>
+        <div class="setting-row">
+          <label><input id="chkHard" type="checkbox" /> Hard mode</label>
+          <label><input id="chkDailyStamp" type="checkbox" checked /> Include date in share</label>
+          <label><input id="chkRandomMarkers" type="checkbox" checked /> Randomise clip region</label>
+        </div>
+        <button id="btnLoadToday">Load Today’s Puzzle</button>
+        <button id="btnReset" class="ghost">Reset</button>
+        <div id="loadStatus" class="status"></div>
+      </div>
+      <div class="kicker">
+        <span class="pill">Round: <strong id="roundNum">—</strong> / 5</span>
+        <span class="pill">Plays left: <strong id="playsLeft">—</strong></span>
+        <span class="pill">Guesses: <strong id="guessesLeft">—</strong></span>
+        <span class="pill" id="metaLicense" style="display:none"></span>
+        <span class="pill" id="metaAttribution" style="display:none"></span>
+      </div>
+      <div class="instrument-list" id="instList"></div>
+      <div class="controls">
+        <button id="btnInitAudio" class="secondary">Initialise Audio</button>
+        <button id="btnPlay" disabled>▶ Play Round</button>
+        <button id="btnStop" class="secondary" disabled>⏹ Stop</button>
+        <button id="btnNext" class="ghost" disabled>Next Round →</button>
+      </div>
+      <div class="guess-row">
+        <input id="guessInput" type="text" placeholder="Type your guess…" disabled />
+        <button id="btnGuess" disabled>Submit</button>
+      </div>
+      <div id="feedback"></div>
+      <div id="hintBox" class="hint" style="display:none"></div>
+      <button id="btnShare" class="ghost" disabled>Share Result</button>
+    </section>
+
+    <section class="local-settings card">
+      <h2>Local Clip Settings (optional)</h2>
+      <p>For testing your own stems locally, specify a clip length. When using the manifest, the game will use the markers defined there.</p>
+      <div class="setting-row">
+        <label for="duration">Clip length (seconds)</label>
+        <input id="duration" type="number" min="1" step="0.5" value="6" />
+      </div>
+    </section>
+  </main>
+
+  <footer class="main-footer">
+    <p>
+      &copy; 2025 Layerdle — Education Edition. Built for learning and fun. Inspired by Wordle and
+      powered by the Web Audio API. All recordings belong to their respective creators and are used
+      for educational purposes only.
+    </p>
+  </footer>
+
+  <!-- Game script: adapted from Layerdle v3 implementation -->
+  <script>
+  (() => {
+    const DEFAULT_ORDER = ["Drums", "Bass", "Chords", "Melody", "Vocals"];
+    const MAX_ROUNDS = 5;
+    const MAX_GUESSES = 6;
+
+    const $ = sel => document.querySelector(sel);
+    const els = {
+      manifestUrl: $("#manifestUrl"),
+      auDate: $("#auDate"),
+      chkHard: $("#chkHard"),
+      chkDailyStamp: $("#chkDailyStamp"),
+      chkRandomMarkers: $("#chkRandomMarkers"),
+      btnLoadToday: $("#btnLoadToday"),
+      btnReset: $("#btnReset"),
+      loadStatus: $("#loadStatus"),
+      roundNum: $("#roundNum"),
+      playsLeft: $("#playsLeft"),
+      guessesLeft: $("#guessesLeft"),
+      instList: $("#instList"),
+      btnInitAudio: $("#btnInitAudio"),
+      btnPlay: $("#btnPlay"),
+      btnStop: $("#btnStop"),
+      btnNext: $("#btnNext"),
+      guessInput: $("#guessInput"),
+      guessBtn: $("#btnGuess"),
+      feedback: $("#feedback"),
+      hintBox: $("#hintBox"),
+      shareBtn: $("#btnShare"),
+      metaLicense: $("#metaLicense"),
+      metaAttribution: $("#metaAttribution"),
+      duration: $("#duration"),
+    };
+
+    // Helper functions
+    function toast(target, msg, ok = false) {
+      target.innerHTML = msg
+        ? `<div class="toast ${ok ? 'ok' : 'err'}">${msg}</div>`
+        : '';
+    }
+    function normalise(s) {
+      return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, '').trim();
+    }
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+    function brisbaneDateStr() {
+      const fmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Australia/Brisbane',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      return fmt.format(new Date());
+    }
+
+    // Game state variables
+    let ctx = null;
+    let stems = [];
+    let gainNodes = [];
+    let activeSources = [];
+    let layerOrder = [0, 1, 2, 3, 4];
+    let round = 0;
+    let playsLeft = 0;
+    let guessesLeft = 0;
+    let answer = '';
+    let aliases = [];
+    let clue = '';
+    let clipDuration = 6;
+    let loaded = false;
+    let gameOver = false;
+    let clueRevealed = false;
+    let hard = false;
+    let randomMarkers = true;
+    let chosenMarker = 'intro';
+    let chosenMarkerTime = 0;
+    let guessHistory = [];
+    let licenseText = '';
+    let attributionText = '';
+
+    // Audio helpers
+    async function ensureAudio() {
+      if (!ctx) {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (ctx.state === 'suspended') await ctx.resume();
+      if (!gainNodes.length) {
+        gainNodes = DEFAULT_ORDER.map(() => {
+          const g = ctx.createGain();
+          g.gain.value = 1;
+          g.connect(ctx.destination);
+          return g;
+        });
+      }
+    }
+    function stopPlayback() {
+      activeSources.forEach((s) => {
+        try {
+          s.stop();
+        } catch {}
+      });
+      activeSources = [];
+      updateUI();
+    }
+    async function decodeArrayBuffer(ab) {
+      return await ctx.decodeAudioData(ab);
+    }
+
+    // UI update functions
+    function updateInstList() {
+      els.instList.innerHTML = '';
+      DEFAULT_ORDER.forEach((name, i) => {
+        const pos = layerOrder.indexOf(i);
+        const active = pos > -1 && pos < round ? ' active' : '';
+        const div = document.createElement('div');
+        div.className = 'instrument' + active;
+        div.textContent = `${pos > -1 ? pos + 1 : '- '}. ${name}`;
+        els.instList.appendChild(div);
+      });
+    }
+    function updateUI() {
+      els.roundNum.textContent = loaded ? round : '—';
+      els.playsLeft.textContent = loaded ? playsLeft : '—';
+      els.guessesLeft.textContent = loaded ? guessesLeft : '—';
+      els.btnPlay.disabled = !loaded || gameOver || playsLeft <= 0;
+      els.btnStop.disabled = activeSources.length === 0;
+      els.btnNext.disabled = !loaded || gameOver || playsLeft > 0 || round >= MAX_ROUNDS;
+      els.guessInput.disabled = !loaded || gameOver;
+      els.guessBtn.disabled = els.guessInput.disabled;
+      els.shareBtn.disabled = !gameOver;
+      // license/attribution pills
+      els.metaLicense.style.display = licenseText ? '' : 'none';
+      els.metaAttribution.style.display = attributionText ? '' : 'none';
+      els.metaLicense.textContent = licenseText ? `License: ${licenseText}` : '';
+      els.metaAttribution.textContent = attributionText ? `© ${attributionText}` : '';
+      // hint
+      const canShowHint = (!hard && round >= 5) || (hard && round >= 5 && guessHistory.some((x) => !x.correct));
+      if (clue && canShowHint) {
+        els.hintBox.style.display = '';
+        els.hintBox.textContent = `CLUE: ${clue}`;
+        clueRevealed = true;
+      } else {
+        els.hintBox.style.display = 'none';
+        els.hintBox.textContent = '';
+      }
+      updateInstList();
+    }
+
+    // Round flow functions
+    function scheduleRoundPlay() {
+      if (!loaded || gameOver || playsLeft <= 0) return;
+      stopPlayback();
+      const now = ctx.currentTime + 0.05;
+      const stopAt = now + clipDuration;
+      for (let k = 0; k < round; k++) {
+        const idx = layerOrder[k];
+        const source = ctx.createBufferSource();
+        source.buffer = stems[idx].audioBuffer;
+        source.connect(gainNodes[idx]);
+        const startAt = chosenMarkerTime || 0;
+        try {
+          source.start(now, startAt, clipDuration);
+        } catch {
+          source.start(now);
+        }
+        try {
+          source.stop(stopAt);
+        } catch {}
+        source.onended = () => {
+          activeSources = activeSources.filter((s) => s !== source);
+          updateUI();
+        };
+        activeSources.push(source);
+      }
+      playsLeft--;
+      updateUI();
+    }
+    function nextRound() {
+      if (!loaded || gameOver) return;
+      if (round < MAX_ROUNDS) {
+        round++;
+        playsLeft = hard ? 1 : 3;
+        updateUI();
+      }
+    }
+    function handleGuess() {
+      if (!loaded || gameOver) return;
+      const g = normalise(els.guessInput.value);
+      const candidates = [answer, ...aliases]
+        .map(normalise)
+        .filter(Boolean);
+      if (!g) return;
+      const correct = candidates.includes(g);
+      guessHistory.push({ guess: g, correct, round });
+      if (correct) {
+        gameOver = true;
+        stopPlayback();
+        toast(els.feedback, '✅ Correct! Nice ears.', true);
+      } else {
+        guessesLeft--;
+        toast(
+          els.feedback,
+          guessesLeft > 0 ? '❌ Not yet. Keep listening.' : '❌ Out of guesses.',
+          false
+        );
+        if (guessesLeft <= 0) {
+          gameOver = true;
+          stopPlayback();
+        }
+      }
+      els.guessInput.value = '';
+      updateUI();
+    }
+    function buildShareText() {
+      const date = els.chkDailyStamp.checked ? brisbaneDateStr() : '';
+      const mode = hard ? 'Hard' : 'Normal';
+      const roundsUsed = guessHistory.find((x) => x.correct)?.round || (gameOver ? MAX_ROUNDS : round);
+      const result = guessHistory.some((x) => x.correct) ? `${roundsUsed}/5` : 'X/5';
+      let grid = '';
+      for (let i = 1; i <= MAX_ROUNDS; i++) {
+        if (i < roundsUsed) grid += '⬜';
+        else if (i === roundsUsed && guessHistory.some((x) => x.correct)) grid += '🟩';
+        else grid += '⬛';
+      }
+      return `Layerdle ${date ? '— ' + date + ' ' : ''}(${mode})\nResult: ${result}\n${grid}\n${answer}`;
+    }
+    async function shareResult() {
+      const text = buildShareText();
+      try {
+        await navigator.clipboard.writeText(text);
+        toast(els.feedback, '📋 Result copied to clipboard!', true);
+      } catch {
+        toast(els.feedback, 'Copy the result below:\n' + text, true);
+      }
+    }
+
+    // Manifest loading
+    async function fetchJSON(url) {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    }
+    function chooseMarker(markers, randomise = true) {
+      const available = Object.entries(markers || {}).filter(
+        ([k, v]) => typeof v === 'number' && !Number.isNaN(v)
+      );
+      if (available.length === 0) return { key: 'intro', time: 0 };
+      if (!randomise) {
+        const first = available[0];
+        return { key: first[0], time: first[1] };
+      }
+      const pick = available[Math.floor(Math.random() * available.length)];
+      return { key: pick[0], time: pick[1] };
+    }
+    async function loadTodayFromManifest() {
+      try {
+        toast(els.loadStatus, '');
+        const url = els.manifestUrl.value.trim();
+        if (!url) {
+          toast(els.loadStatus, 'Enter a Manifest URL.', false);
+          return;
+        }
+        await ensureAudio();
+        const manifest = await fetchJSON(url);
+        const today = brisbaneDateStr();
+        const entry =
+          manifest[today] ||
+          Object.values(manifest)[Math.floor(Math.random() * Object.keys(manifest).length)];
+        if (!entry) {
+          toast(els.loadStatus, 'Manifest empty.', false);
+          return;
+        }
+        // metadata
+        answer = entry.title || '';
+        aliases = Array.isArray(entry.aliases) ? entry.aliases : [];
+        clue = entry.clue || '';
+        licenseText = entry.license || '';
+        attributionText = entry.attribution || '';
+        clipDuration = Math.max(1, parseFloat(els.duration.value || '6'));
+        const markerPick = chooseMarker(entry.markers || {}, els.chkRandomMarkers.checked);
+        chosenMarker = markerPick.key;
+        chosenMarkerTime = markerPick.time || 0;
+        // download stems
+        const urls = entry.stems || [];
+        if (!answer || urls.length !== 5) {
+          toast(els.loadStatus, 'Entry must have a title and exactly 5 stems.', false);
+          return;
+        }
+        stems = [];
+        for (let i = 0; i < 5; i++) {
+          const u = urls[i];
+          const ab = await (await fetch(u, { cache: 'no-store' })).arrayBuffer();
+          const buf = await decodeArrayBuffer(ab);
+          stems.push({ name: DEFAULT_ORDER[i], audioBuffer: buf });
+        }
+        // prepare state
+        hard = els.chkHard.checked;
+        layerOrder = hard ? shuffle([0, 1, 2, 3, 4]) : [0, 1, 2, 3, 4];
+        round = 1;
+        playsLeft = hard ? 1 : 3;
+        guessesLeft = MAX_GUESSES;
+        gameOver = false;
+        clueRevealed = false;
+        loaded = true;
+        guessHistory = [];
+        toast(
+          els.loadStatus,
+          `Loaded: ${answer} • Marker: ${chosenMarker} @ ${chosenMarkerTime}s • ${licenseText || 'Unspecified license'}`,
+          true
+        );
+        updateUI();
+      } catch (err) {
+        console.error(err);
+        toast(els.loadStatus, 'Failed to load puzzle. Check URL/CORS/markers.', false);
+      }
+    }
+    function resetAll() {
+      stopPlayback();
+      stems = [];
+      round = 0;
+      playsLeft = 0;
+      guessesLeft = 0;
+      answer = '';
+      aliases = [];
+      clue = '';
+      clipDuration = 6;
+      loaded = false;
+      gameOver = false;
+      clueRevealed = false;
+      guessHistory = [];
+      licenseText = '';
+      attributionText = '';
+      toast(els.feedback, '');
+      toast(els.loadStatus, '');
+      updateUI();
+    }
+
+    // Event wiring
+    els.btnInitAudio.addEventListener('click', ensureAudio);
+    els.btnLoadToday.addEventListener('click', loadTodayFromManifest);
+    els.btnReset.addEventListener('click', resetAll);
+    els.btnPlay.addEventListener('click', scheduleRoundPlay);
+    els.btnStop.addEventListener('click', stopPlayback);
+    els.btnNext.addEventListener('click', nextRound);
+    els.guessBtn.addEventListener('click', handleGuess);
+    els.guessInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleGuess();
+    });
+    els.shareBtn.addEventListener('click', shareResult);
+
+    // Set current date on load
+    els.auDate.value = brisbaneDateStr();
+    // Register service worker for offline caching
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch((err) => console.warn('SW registration failed', err));
+    }
+    updateUI();
+  })();
+  </script>
+</body>
+</html>
