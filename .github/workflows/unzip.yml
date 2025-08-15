@@ -4,10 +4,11 @@ on:
   push:
     paths:
       - 'layerdle-edu-site.zip'
+        workflow_dispatch:
 
 permissions:
   contents: write
-  workflow_dispatch:
+  
 jobs:
   unzip:
     runs-on: ubuntu-latest
