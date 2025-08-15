@@ -1,0 +1,46 @@
+name: Daily Puzzle (Brisbane)
+
+on:
+  schedule:
+    - cron: '0 14 * * *'   # 00:00 Australia/Brisbane
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update manifest for today
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const tz = 'Australia/Brisbane';
+          const today = new Intl.DateTimeFormat('en-CA',{timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
+          const poolData = JSON.parse(fs.readFileSync('layerdle-edu-site/pool.json', 'utf8'));
+          const pool = Array.isArray(poolData.pool) ? poolData.pool : [];
+          if (pool.length === 0) throw new Error('Pool is empty');
+          const pick = pool[Math.floor(Math.random() * pool.length)];
+          const manifestPath = 'layerdle-edu-site/manifest.json';
+          let manifest = {};
+          try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch (e) {}
+          manifest[today] = {
+            title: pick.title || '',
+            clue: pick.clue || '',
+            license: pick.license || '',
+            attribution: pick.attribution || '',
+            markers: pick.markers || { intro: 0 },
+            aliases: pick.aliases || [],
+            stems: pick.stems
+          };
+          fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+          NODE
+      - name: Commit updated manifest
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add layerdle-edu-site/manifest.json
+          git commit -m "Update daily puzzle manifest" || echo "No changes to commit"
+          git push
