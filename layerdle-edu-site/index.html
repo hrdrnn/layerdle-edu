@@ -45,7 +45,7 @@
       <div class="settings">
         <div class="setting-row">
           <label for="manifestUrl">Manifest URL</label>
-          <input id="manifestUrl" type="url" placeholder="https://your-site.com/manifest.json"  value="manifest.json"/>
+          <input id="manifestUrl" type="url" placeholder="https://your-site.com/manifest.json" value="manifest.json" />
         </div>
         <div class="setting-row">
           <label for="auDate">Date (Australia/Brisbane)</label>
@@ -167,6 +167,10 @@
     let ctx = null;
     let stems = [];
     let gainNodes = [];
+    // Master gain node to control overall output volume.
+    // We'll route all per-layer gains through this so we can
+    // ensure audio isn't muted on certain browsers (e.g. iOS/desktop).
+    let masterGain = null;
     let activeSources = [];
     let layerOrder = [0, 1, 2, 3, 4];
     let round = 0;
@@ -192,12 +196,21 @@
       if (!ctx) {
         ctx = new (window.AudioContext || window.webkitAudioContext)();
       }
+      // Ensure the context is running (some browsers suspend until user interaction)
       if (ctx.state === 'suspended') await ctx.resume();
+      // Create masterGain once and connect it to the audio output
+      if (!masterGain) {
+        masterGain = ctx.createGain();
+        masterGain.gain.value = 1.0;
+        masterGain.connect(ctx.destination);
+      }
+      // Lazily create per-layer gain nodes and route them into masterGain
       if (!gainNodes.length) {
         gainNodes = DEFAULT_ORDER.map(() => {
           const g = ctx.createGain();
           g.gain.value = 1;
-          g.connect(ctx.destination);
+          // Connect each layer gain to the master, not directly to destination
+          g.connect(masterGain);
           return g;
         });
       }
@@ -258,6 +271,15 @@
     // Round flow functions
     function scheduleRoundPlay() {
       if (!loaded || gameOver || playsLeft <= 0) return;
+      // Make sure the AudioContext is running and master volume is up
+      if (ctx && ctx.state !== 'running') {
+        ctx.resume();
+      }
+      if (masterGain) {
+        // Reset any scheduled volume changes and ensure full volume
+        masterGain.gain.cancelScheduledValues(ctx.currentTime);
+        masterGain.gain.setValueAtTime(1.0, ctx.currentTime);
+      }
       stopPlayback();
       const now = ctx.currentTime + 0.05;
       const stopAt = now + clipDuration;
@@ -463,10 +485,9 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch((err) => console.warn('SW registration failed', err));
     }
-    
-       loadTodayFromManifest();
-  updateUI();
-  nifest();updateUI();
+    // Automatically load today's puzzle using the default manifest value
+    loadTodayFromManifest();
+    updateUI();
   })();
   </script>
 </body>
