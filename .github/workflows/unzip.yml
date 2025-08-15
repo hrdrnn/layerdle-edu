@@ -5,6 +5,8 @@ on:
     paths:
       - 'layerdle-edu-site.zip'
 
+permissions:
+  contents: write
   workflow_dispatch:
 jobs:
   unzip:
