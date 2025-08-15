@@ -1,0 +1,24 @@
+name: Unzip site
+
+on:
+  push:
+    paths:
+      - 'layerdle-edu-site.zip'
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unzip site
+        run: unzip -o layerdle-edu-site.zip -d ./
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add -A
+          git commit -m "Unzip site" || true
+      - name: Push changes
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
