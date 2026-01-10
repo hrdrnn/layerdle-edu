@@ -3299,5 +3299,27 @@
       "stems/sample_song/melody.wav",
       "stems/sample_song/vocals.wav"
     ]
+  },
+  "2026-01-11": {
+    "title": "Sample Song",
+    "clue": "A demonstration track for your own stems.",
+    "license": "For demonstration only",
+    "attribution": "Generated silent track. Replace with your own stems.",
+    "markers": {
+      "intro": 0,
+      "chorus": 0,
+      "bridge": 0
+    },
+    "aliases": [
+      "sample song",
+      "demo"
+    ],
+    "stems": [
+      "stems/sample_song/drums.wav",
+      "stems/sample_song/bass.wav",
+      "stems/sample_song/chords.wav",
+      "stems/sample_song/melody.wav",
+      "stems/sample_song/vocals.wav"
+    ]
   }
 }
